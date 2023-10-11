@@ -1,0 +1,8 @@
+__pycache__
+.env.*
+*.db
+docker-compose.yml
+docker-compose.override.yml
+dbbackup
+*.log
+screenshots/**/*.webp

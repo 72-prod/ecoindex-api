@@ -1,0 +1,91 @@
+services:
+  db:
+    image: mysql
+    restart: always
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ecoindex
+      MYSQL_USER: ecoindex
+      MYSQL_PASSWORD: ecoindex
+      MYSQL_ROOT_PASSWORD: ecoindex
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER --password=$$MYSQL_PASSWORD
+      timeout: 5s
+      retries: 10
+      interval: 2s
+
+  api:
+    build:
+      context: ./
+      dockerfile: ./docker/api/dockerfile
+    restart: always
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://ecoindex:ecoindex@db/ecoindex?charset=utf8mb4
+      TZ: Europe/Paris
+      WORKER_BROKER_URL: redis://redis/0
+      WORKER_BACKEND_URL: redis://redis/1
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./
+      dockerfile: ./docker/worker/dockerfile
+      args:
+        CHROME_VERSION_MAIN: 111
+    restart: always
+    environment:
+      DATABASE_URL: mysql+aiomysql://ecoindex:ecoindex@db/ecoindex?charset=utf8mb4
+      TZ: Europe/Paris
+      WORKER_BROKER_URL: redis://redis/0
+      WORKER_BACKEND_URL: redis://redis/1
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:alpine
+    restart: always
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis:/data
+
+  flower:
+    image: mher/flower
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis/0
+      FLOWER_BASIC_AUTH: "username:$changeme$"
+
+  db-backup:
+    container_name: db-backup
+    restart: always
+    image: tiredofit/db-backup
+    links:
+     - db
+    volumes:
+      - dbbackup:/backup
+    environment:
+      CONTAINER_NAME: db-backup
+      DB_HOST: db
+      DB_TYPE: mysql
+      DB_NAME: ecoindex
+      DB_USER: ecoindex
+      DB_PASS: ecoindex
+      DB_DUMP_FREQ: 1440
+      DB_DUMP_BEGIN: 0000
+      DB_CLEANUP_TIME: 8640
+      COMPRESSION: BZ
+      MD5: TRUE
+
+volumes:
+  db:
+  dbbackup:
+  redis:
